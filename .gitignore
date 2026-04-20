@@ -1,0 +1,20 @@
+# Ambientes Virtuais
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDEs (VS Code, PyCharm)
+.vscode/
+.idea/
+
+# Variáveis de ambiente
+.env
+
+# Redis (se baixar logs ou dumps locais)
+*.rdb
