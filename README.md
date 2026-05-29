@@ -21,6 +21,17 @@ A aplicação dentro do cluster foi dividida de forma resiliente e escalável:
 * **FastAPI Service (`ClusterIP`)**: Um ponto de entrada interno que distribui a carga entre as réplicas na porta `80`.
 * **Redis Deployment & Service (`ClusterIP`)**: Uma instância isolada do Redis protegida na rede interna do cluster através do DNS estável `redis-service`.
 
+
+### Prints dos Testes:
+![Cache Miss](images/teste1-get.JPG)
+
+![Cache Hit](images/teste-get1.JPG)
+
+![Cache Hit](images/teste-get2.JPG)
+
+![POST](images/teste-post1.JPG)
+
+![Cache Hit](images/teste-get3.JPG)
 ---
 
 ## ⚙️ Configuração do Ambiente e Execução (GitHub Codespaces)
