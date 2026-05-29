@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fastapi-deployment
+  labels:
+    app: fastapi
+spec:
+  replicas: 2 # Garante 2 pods rodando sua API para alta disponibilidade
+  selector:
+    matchLabels:
+      app: fastapi
+  template:
+    metadata:
+      labels:
+        app: fastapi
+    spec:
+      containers:
+      - name: fastapi-container
+        image: sua-imagem-docker:latest # Nome da imagem que você vai buildar
+        imagePullPolicy: IfNotPresent   # Força o Kubernetes a usar a imagem local do seu ambiente
+        ports:
+        - containerPort: 8000           # Porta padrão que o Uvicorn/FastAPI escuta
+        env:
+        - name: REDIS_HOST
+          value: "redis-service"        # Aponta automaticamente para o Service do Redis no cluster
+        - name: REDIS_PORT
+          value: "6379"

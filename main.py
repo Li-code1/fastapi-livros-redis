@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os  # Adicionado para ler as variáveis de ambiente do Kubernetes
 from typing import List
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -7,10 +8,12 @@ import redis.asyncio as redis # Versão assíncrona da lib
 
 app = FastAPI(title="Livraria com Cache Redis")
 
-# --- Configuração do Redis ---
-# Em produção, essas infos viriam de variáveis de ambiente (.env)
-REDIS_HOST = "localhost"
-REDIS_PORT = 6379
+# --- Configuração Dinâmica do Redis ---
+# Se a aplicação rodar no Kubernetes, ela usará "redis-service" injetado pelo deployment.yaml.
+# Se rodar localmente sem K8s, ela usará por padrão "localhost".
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+
 redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
 # --- Modelo e Banco em Memória ---
@@ -63,6 +66,10 @@ async def listar_livros():
 @app.post("/livros", status_code=201)
 async def criar_livro(novo_livro: Livro):
     """Adiciona um livro e limpa o cache para evitar dados obsoletos."""
+    # Verifica se o ID já existe para evitar duplicidade
+    if any(livro.id == novo_livro.id for livro in db_livros):
+        raise HTTPException(status_code=400, detail="Livro com este ID já existe.")
+        
     db_livros.append(novo_livro)
     # Sempre que houver alteração, deletamos o cache
     await deletar_livros_redis()

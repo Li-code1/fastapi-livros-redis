@@ -1,73 +1,111 @@
-# 📚 API Livraria 2.0: Performance com Redis Cache
+# 📚 API Livraria 3.0: Performance com Redis Cache & Orquestração Kubernetes
 
-Este projeto é uma evolução da API de Livros em FastAPI. O objetivo principal foi implementar uma camada de **Cache** utilizando o **Redis** para otimizar o tempo de resposta da listagem de livros, reduzindo a carga no "banco de dados" e garantindo alta performance.
+Este projeto é uma evolução da API de Livros em FastAPI. O objetivo principal foi implementar uma camada de **Cache** utilizando o **Redis** para otimizar o tempo de resposta da listagem de livros e, em seguida, **orquestrar a aplicação completa em contêineres utilizando Kubernetes**, garantindo alta disponibilidade com réplicas e isolamento de rede.
 
 ## 🛠️ Tecnologias e Conceitos
 
-  * **FastAPI**: Desenvolvimento de endpoints assíncronos.
-  * **Redis**: Armazenamento de dados em memória para cache rápido.
-  * **Cache-Aside Pattern**: Lógica que verifica o cache antes de consultar a fonte de dados principal.
-  * **Invalidação de Cache**: Garantia de que o cache seja limpo ao adicionar novos dados, evitando informações obsoletas.
+* **FastAPI**: Desenvolvimento de endpoints assíncronos.
+* **Redis**: Armazenamento de dados em memória para cache rápido.
+* **Cache-Aside Pattern & Invalidação**: Lógica para leitura e limpeza inteligente do cache.
+* **Docker**: Conteinerização da aplicação FastAPI utilizando imagens leves (`python:3.10-slim`).
+* **Kubernetes (K8s)**: Orquestração dos microsserviços.
+* **Kind (Kubernetes in Docker)**: Ferramenta para execução do cluster local diretamente no **GitHub Codespaces**.
 
------
+---
 
-## ⚙️ Configuração do Ambiente (Windows)
+## 🏗️ Arquitetura no Kubernetes
 
-### 1\. Preparar o Servidor Redis
+A aplicação dentro do cluster foi dividida de forma resiliente e escalável:
 
-Como esta versão não utiliza Docker, siga os passos abaixo:
+* **FastAPI Deployment**: Configurado com **2 Réplicas (Pods)** rodando em paralelo para garantir que a API nunca fique fora do ar.
+* **FastAPI Service (`ClusterIP`)**: Um ponto de entrada interno que distribui a carga entre as réplicas na porta `80`.
+* **Redis Deployment & Service (`ClusterIP`)**: Uma instância isolada do Redis protegida na rede interna do cluster através do DNS estável `redis-service`.
 
-1.  Baixe o Redis Portátil em: [Redis for Windows (GitHub)](https://github.com/tporadowski/redis/releases).
-2.  Extraia o conteúdo e execute o arquivo `redis-server.exe`.
-3.  **Mantenha a janela do terminal aberta** enquanto utiliza a API.
+---
 
-### 2\. Instalar Dependências Python
+## ⚙️ Configuração do Ambiente e Execução (GitHub Codespaces)
 
-No seu terminal, instale as bibliotecas necessárias:
+Como o projeto está preparado para rodar no ambiente em nuvem do **Codespaces**, siga os passos abaixo no terminal integrado:
 
-```bash
-pip install fastapi uvicorn redis
-```
-
-### 3\. Executar a API
-
-Inicie o servidor com o comando:
+### 1. Inicializar o Cluster Kubernetes (Kind)
+O Codespaces já vem com o Docker instalado. Execute os comandos abaixo para instalar o **Kind** e provisionar o cluster:
 
 ```bash
-uvicorn main:app --reload
+# Baixar e configurar o binário do Kind
+curl -Lo ./kind [https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64](https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64)
+chmod +x ./kind
+sudo mv ./kind /usr/local/bin/kind
+
+# Criar o cluster Kubernetes
+kind create cluster --name meu-cluster
+
 ```
 
------
+### 2. Construir e Carregar a Imagem Docker da API
 
-## 🧪 Guia de Testes via Postman
+Gere a imagem do seu código fonte e envie-a para dentro do ecossistema de nós do Kind:
 
-Siga a sequência abaixo para validar o funcionamento do Cache:
+```bash
+# Build da imagem local
+docker build -t sua-imagem-docker .
 
-### 1\. Listar Livros - Primeira Chamada (Cache Miss)
+# Enviar a imagem para dentro do cluster
+kind load docker-image sua-imagem-docker --name meu-cluster
 
-  * **Método:** `GET`
-  * **URL:** `http://127.0.0.1:8000/livros`
-  * **O que observar:** A resposta deve demorar cerca de 2 segundos (simulação de busca lenta).
+```
 
-> **Print do Teste (Observe o campo "Time" no canto direito):**
-![Primeiro GET - Cache Miss](images/get_teste.JPG)
------
+### 3. Aplicar os Manifestos no Kubernetes
 
-### 2\. Listar Livros - Chamada Subsequente (Cache Hit)
+Aplique as configurações na ordem correta (o banco de cache precisa subir primeiro para que a API consiga se conectar):
 
-  * **Ação:** Clique em **Send** novamente para o mesmo endpoint `GET`.
-  * **O que observar:** A resposta será quase **instantânea** (menos de 50ms), pois os dados estão vindo do Redis.
+```bash
+# 1. Subir a infraestrutura do Redis Cache
+kubectl apply -f redis-manifest.yaml
 
-> **Print do Teste (Observe a melhora no tempo de resposta):**
-![Segundo GET - Cache Hit](images/get_teste2.JPG)
------
+# 2. Subir as duas réplicas do Backend FastAPI
+kubectl apply -f deployment.yaml
 
-### 3\. Cadastrar Livro (Invalidação de Cache)
+# 3. Criar a rede de comunicação interna da API
+kubectl apply -f service.yaml
 
-  * **Método:** `POST`
-  * **URL:** `http://127.0.0.1:8000/livros`
-  * **Body (JSON):**
-<!-- end list -->
+```
+
+Para verificar se todos os 3 Pods estão ativos e saudáveis, rode:
+
+```bash
+kubectl get pods
+
+```
+
+---
+
+## 🧪 Guia de Testes via Postman / Navegador
+
+Como os serviços no Kubernetes foram configurados como `ClusterIP` (protegidos contra acessos externos diretamente), precisamos abrir um túnel seguro para testar na nossa máquina:
+
+```bash
+kubectl port-forward service/fastapi-service 8080:80
+
+```
+
+> **Nota no Codespaces:** Assim que executar o comando acima, o GitHub exibirá um pop-up no canto inferior direito. Clique em **"Open in Browser"** para abrir a página ou utilize a URL gerada no Postman alterando a porta padrão para **8080**.
+
+### 1. Listar Livros - Primeira Chamada (Cache Miss)
+
+* **Método:** `GET`
+* **URL:** `http://localhost:8080/livros`
+* **O que observar:** A resposta vai demorar cerca de 2 segundos (simulando a busca lenta no banco). O log interno de um dos Pods registrará `DEBUG: Dados salvos no Redis!`.
+
+### 2. Listar Livros - Chamadas Seguintes (Cache Hit)
+
+* **Ação:** Clique em **Send** novamente para o mesmo endpoint.
+* **O que observar:** O retorno será **instantâneo** (< 50ms). O tráfego agora está sendo respondido de forma ultra rápida pelo Pod do Redis de dentro do cluster.
+
+### 3. Cadastrar Livro (Invalidação Automática de Cache)
+
+* **Método:** `POST`
+* **URL:** `http://localhost:8080/livros`
+* **Body (JSON):**
 
 ```json
 {
@@ -76,26 +114,18 @@ Siga a sequência abaixo para validar o funcionamento do Cache:
     "autor": "Clarice Lispector",
     "ano": 1977
 }
+
 ```
 
-  * **O que observar:** O sistema irá adicionar o livro e **apagar o cache antigo** no Redis.
+* **O que observar:** O registro será salvo na memória e o comando de limpeza apagará a chave `"livros"` do Redis do cluster para evitar que os usuários visualizem dados defasados.
 
-> **Print do Teste (POST efetuado com sucesso):**
-![POST](images/post_teste.JPG)
-![POST](images/teste_api.JPG)
------
+---
 
-### 4\. Validar Consistência
+## 📝 Configurações de Nuvem e Variáveis de Ambiente
 
-  * **Ação:** Faça um novo `GET /livros`.
-  * **O que observar:** A chamada voltará a ser lenta uma única vez para atualizar o cache com o novo livro incluído.
+* **Variáveis de Ambiente**: O arquivo `main.py` utiliza `os.getenv("REDIS_HOST", "localhost")` para rodar de forma híbrida.
+* **Injeção via K8s**: O arquivo `deployment.yaml` se encarrega de injetar o valor dinâmico `"redis-service"`, permitindo que o código localize o banco de cache sem configurações fixas (hardcoded).
 
------
+```
 
-## 📝 Notas de Implementação
-
-  * **Método `salvar_livros_redis`**: Converte a lista de objetos para JSON e armazena com um **TTL (Time To Live)** de 60 segundos.
-  * **Método `deletar_livros_redis`**: Garante que o usuário nunca veja dados antigos após um cadastro.
-  * **Conexão Assíncrona**: Utiliza `redis.asyncio` para não bloquear o loop de eventos da API.
-
------
+```
