@@ -1,0 +1,49 @@
+name: Python Application CI/CD
+
+# Configuração do Workflow: acionado em eventos de push na branch main
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    # Configuração do Job: Utiliza um runner Ubuntu com ubuntu-latest
+    runs-on: ubuntu-latest
+
+    steps:
+    # Passo: Checkout do Código usando actions/checkout@v3
+    - name: Checkout de codigo
+      uses: actions/checkout@v3
+
+    # Passo: Instalar Python utilizando a ação oficial (versão 3.9)
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.9"
+
+    # Passo: Instalar Poetry usando pip install poetry
+    - name: Instalar Poetry
+      run: |
+        python -m pip install --upgrade pip
+        pip install poetry
+
+    # Configurar cache para otimizar as dependências do Poetry
+    - name: Configurar Cache do Poetry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pypoetry
+        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-poetry-
+
+    # Passo: Instalar Dependências executando poetry install --no-root --no-interaction
+ 
+    - name: Instalar dependencias do projeto
+      run: poetry install --no-root --no-interaction
+
+    # Passo: Rodar Testes usando poetry run pytest
+    # O workflow falhará automaticamente se os testes não passarem (comportamento padrão do pytest no CI)
+    - name: Rodar testes com pytest
+      run: poetry run pytest
