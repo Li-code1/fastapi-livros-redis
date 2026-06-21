@@ -5,6 +5,7 @@ from typing import List
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import redis.asyncio as redis # Versão assíncrona da lib
+import logging
 
 app = FastAPI(title="Livraria com Cache Redis")
 
@@ -44,22 +45,17 @@ async def deletar_livros_redis():
     print("DEBUG: Cache do Redis limpo!")
 
 # --- Endpoints ---
-
 @app.get("/livros", response_model=List[Livro])
 async def listar_livros():
-    """Tenta buscar no Redis, se falhar, busca na lista e salva no cache."""
-    # 1. Tenta buscar no Cache
     cache_livros = await redis_client.get("livros")
     
     if cache_livros:
-        print("DEBUG: Retornando dados do CACHE (Redis)")
+        logging.info("Retornando dados do CACHE (Redis)") # <--- Alterado para logging
         return json.loads(cache_livros)
 
-    # 2. Se não estiver no cache, simula busca lenta no 'banco'
-    print("DEBUG: Cache vazio. Buscando no 'banco'...")
-    await asyncio.sleep(2) # Simulação de lentidão
+    logging.info("Cache vazio. Buscando no 'banco'...")   # <--- Alterado para logging
+    await asyncio.sleep(2)
     
-    # 3. Salva no Redis para a próxima consulta
     await salvar_livros_redis(db_livros)
     return db_livros
 
